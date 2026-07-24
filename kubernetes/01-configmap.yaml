@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reservas-config
+  namespace: sistema-reservas
+data:
+  INVENTARIO_URL: "http://inventario-service:5000"
+  PAGOS_URL: "http://pagos-service:5000"
+  NOTIFICACIONES_URL: "http://notificaciones-service:5000"
+  RESERVAS_URL: "http://reservas-service:5000"
+
+  INVENTARIO_TIMEOUT: "2"
+  PAGOS_TIMEOUT: "3"
+  NOTIFICACIONES_TIMEOUT: "2"
+
+  PAYMENT_DELAY_SECONDS: "1"
+  PAYMENT_FAILURE_RATE: "0"
+
+  NOTIFICATION_DELAY_SECONDS: "0.5"
+  NOTIFICATION_FAILURE_RATE: "0"
+
+  MAX_CONCURRENT_REQUESTS: "10"
+  RATE_LIMIT: "30"
+  RATE_WINDOW_SECONDS: "60"
+
+  POSTGRES_HOST: "postgresql"
+  POSTGRES_PORT: "5432"

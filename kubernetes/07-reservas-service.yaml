@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reservas-service
+  namespace: sistema-reservas
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: reservas-service
+
+  template:
+    metadata:
+      labels:
+        app: reservas-service
+
+    spec:
+
+      containers:
+      - name: reservas-service
+
+        image: reservas-service:2.0
+        imagePullPolicy: Never
+
+        ports:
+        - containerPort: 5000
+
+        env:
+
+        - name: INVENTARIO_URL
+          valueFrom:
+            configMapKeyRef:
+              name: reservas-config
+              key: INVENTARIO_URL
+
+        - name: PAGOS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: reservas-config
+              key: PAGOS_URL
+
+        - name: NOTIFICACIONES_URL
+          valueFrom:
+            configMapKeyRef:
+              name: reservas-config
+              key: NOTIFICACIONES_URL
+
+        envFrom:
+
+        - secretRef:
+            name: postgres-secret
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 8
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 15
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reservas-service
+  namespace: sistema-reservas
+
+spec:
+  selector:
+    app: reservas-service
+
+  ports:
+  - port: 5000
+    targetPort: 5000
+
+  type: ClusterIP

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pagos-service
+  namespace: sistema-reservas
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pagos-service
+  template:
+    metadata:
+      labels:
+        app: pagos-service
+    spec:
+      containers:
+      - name: pagos-service
+        image: pagos-service:1.0
+        imagePullPolicy: Never
+
+        ports:
+        - containerPort: 5000
+
+        env:
+        - name: PAYMENT_DELAY_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: reservas-config
+              key: PAYMENT_DELAY_SECONDS
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pagos-service
+  namespace: sistema-reservas
+spec:
+  selector:
+    app: pagos-service
+  ports:
+  - port: 5000
+    targetPort: 5000
+  type: ClusterIP

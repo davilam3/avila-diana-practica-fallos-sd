@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pagos-service
+  namespace: sistema-reservas
+spec:
+  template:
+    spec:
+      containers:
+        - name: pagos-service
+          env:
+            - name: PAYMENT_DELAY_SECONDS
+              value: "20"
