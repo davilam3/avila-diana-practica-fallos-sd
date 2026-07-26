@@ -1,40 +1,44 @@
-Write-Host "=== LA PASARELA LENTA ===" -ForegroundColor Cyan
+$ErrorActionPreference = "Stop"
 
-Write-Host "Configurando Pagos con una latencia de 20 segundos..."
+$namespace = "sistema-reservas"
+$deployment = "pagos-service"
+$patchFile = ".\chaos\02-pasarela-lenta.yaml"
 
-kubectl patch deployment pagos-service `
-  -n sistema-reservas `
-  --type strategic `
-  --patch-file ".\chaos\02-pasarela-lenta.yaml"
+Write-Host ""
+Write-Host "=============================================="
+Write-Host " INYECTANDO FALLO: PASARELA LENTA"
+Write-Host "=============================================="
+Write-Host ""
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "No se pudo aplicar el parche." -ForegroundColor Red
-    exit 1
-}
+Write-Host "Configurando PAYMENT_DELAY_SECONDS=20..."
 
-Write-Host "`nEsperando que termine el despliegue..."
+kubectl patch deployment $deployment `
+  -n $namespace `
+  --patch-file $patchFile
 
-kubectl rollout status deployment/pagos-service `
-  -n sistema-reservas `
-  --timeout=120s
+Write-Host ""
+Write-Host "Esperando que finalice el rollout..."
 
-Write-Host "`nConfiguración aplicada:"
+kubectl rollout status deployment/$deployment `
+  -n $namespace `
+  --timeout=180s
 
-kubectl get deployment pagos-service `
-  -n sistema-reservas `
+Write-Host ""
+Write-Host "Verificando la variable de entorno..."
+
+kubectl get deployment $deployment `
+  -n $namespace `
   -o jsonpath="{.spec.template.spec.containers[0].env}"
 
-Write-Host "`n`nEstado del pod de Pagos:"
+Write-Host ""
+Write-Host ""
+Write-Host "Pods actuales del Servicio de Pagos:"
 
 kubectl get pods `
-  -n sistema-reservas `
+  -n $namespace `
   -l app=pagos-service `
   -o wide
 
-Write-Host "`nEl Servicio de Pagos tardará 20 segundos." `
-  -ForegroundColor Yellow
-
-Write-Host "Realice una reserva y compruebe que:"
-Write-Host "- Reservas cancela la espera mediante un timeout."
-Write-Host "- El cliente recibe un error controlado."
-Write-Host "- Después de varios fallos se abre el Circuit Breaker."
+Write-Host ""
+Write-Host "Fallo inyectado correctamente."
+Write-Host "Pagos tardará 20 segundos por solicitud."

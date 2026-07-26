@@ -33,6 +33,14 @@ NOTIFICACIONES_URL = os.getenv(
 )
 
 INVENTARIO_TIMEOUT = float(os.getenv("INVENTARIO_TIMEOUT", "2"))
+INVENTARIO_MAX_INTENTOS = int(
+    os.getenv("INVENTARIO_MAX_INTENTOS", "3")
+)
+
+INVENTARIO_BACKOFF_BASE = float(
+    os.getenv("INVENTARIO_BACKOFF_BASE", "0.5")
+)
+
 PAGOS_TIMEOUT = float(os.getenv("PAGOS_TIMEOUT", "3"))
 NOTIFICACIONES_TIMEOUT = float(os.getenv("NOTIFICACIONES_TIMEOUT", "2"))
 
@@ -105,34 +113,94 @@ def inicializar_base_datos() -> None:
     )
 
 
-def llamar_inventario(datos: dict[str, Any]) -> dict[str, Any]:
+def llamar_inventario(
+    datos: dict[str, Any]
+) -> dict[str, Any]:
+
     if not inventario_breaker.can_execute():
-        raise RuntimeError("Circuit Breaker de Inventario abierto")
+        estado = inventario_breaker.get_state()
 
-    try:
-        respuesta = requests.post(
-            f"{INVENTARIO_URL}/inventario/descontar",
-            json=datos,
-            timeout=INVENTARIO_TIMEOUT
-        )
-
-        respuesta.raise_for_status()
-        inventario_breaker.register_success()
-
-        return respuesta.json()
-
-    except requests.RequestException as error:
-        inventario_breaker.register_failure()
-
-        app.logger.error(
-            "Fallo en Inventario. Circuito=%s. Error=%s",
-            inventario_breaker.get_state(),
-            error
+        app.logger.warning(
+            "Circuit Breaker de Inventario abierto. "
+            "Solicitud rechazada sin contactar al servicio. "
+            "Circuito=%s",
+            estado
         )
 
         raise RuntimeError(
-            "Servicio de Inventario no disponible"
-        ) from error
+            "Circuit Breaker de Inventario abierto"
+        )
+
+    ultimo_error: Exception | None = None
+
+    for intento in range(1, INVENTARIO_MAX_INTENTOS + 1):
+        try:
+            app.logger.info(
+                "Inventario: intento %s/%s",
+                intento,
+                INVENTARIO_MAX_INTENTOS
+            )
+
+            respuesta = requests.post(
+                f"{INVENTARIO_URL}/inventario/descontar",
+                json=datos,
+                timeout=INVENTARIO_TIMEOUT
+            )
+
+            respuesta.raise_for_status()
+
+            inventario_breaker.register_success()
+
+            app.logger.info(
+                "Inventario respondió correctamente. "
+                "Circuito=%s",
+                inventario_breaker.get_state()
+            )
+
+            return respuesta.json()
+
+        except requests.RequestException as error:
+            ultimo_error = error
+
+            app.logger.warning(
+                "Fallo consultando Inventario. "
+                "Intento=%s/%s. Error=%s",
+                intento,
+                INVENTARIO_MAX_INTENTOS,
+                error
+            )
+
+            if intento < INVENTARIO_MAX_INTENTOS:
+                espera = INVENTARIO_BACKOFF_BASE * (
+                    2 ** (intento - 1)
+                )
+
+                app.logger.info(
+                    "Retry de Inventario en %.1f segundos",
+                    espera
+                )
+
+                time.sleep(espera)
+
+    # Se registra un fallo en el Circuit Breaker solamente
+    # después de agotar todos los reintentos.
+    inventario_breaker.register_failure()
+
+    estado = inventario_breaker.get_state()
+
+    app.logger.error(
+        "Inventario no disponible después de %s intentos. "
+        "Circuito=%s. Último error=%s",
+        INVENTARIO_MAX_INTENTOS,
+        estado,
+        ultimo_error
+    )
+
+    raise RuntimeError(
+        "Servicio de Inventario no disponible "
+        "después de varios intentos"
+    ) from ultimo_error
+
 
 
 def restaurar_inventario(datos: dict[str, Any]) -> None:

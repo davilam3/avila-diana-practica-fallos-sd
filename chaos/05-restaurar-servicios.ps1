@@ -1,5 +1,4 @@
-Write-Host "=== RESTAURACIÓN DE SERVICIOS ===" `
-  -ForegroundColor Cyan
+Write-Host "=== RESTAURACION DE SERVICIOS ===" -ForegroundColor Cyan
 
 Write-Host "Restaurando Servicio de Inventario..."
 
@@ -13,13 +12,14 @@ kubectl scale deployment notificaciones-service `
   --replicas=1 `
   -n sistema-reservas
 
-Write-Host "Eliminando la latencia forzada de Pagos..."
+Write-Host "Restaurando Servicio de Pagos..."
 
 kubectl set env deployment/pagos-service `
-  PAYMENT_DELAY_SECONDS=0 `
+  PAYMENT_DELAY_SECONDS- `
   -n sistema-reservas
 
-Write-Host "`nEsperando los rollouts..."
+Write-Host ""
+Write-Host "Esperando los despliegues..."
 
 kubectl rollout status deployment/inventario-service `
   -n sistema-reservas `
@@ -33,37 +33,15 @@ kubectl rollout status deployment/pagos-service `
   -n sistema-reservas `
   --timeout=120s
 
-Write-Host "`nEsperando que los pods estén disponibles..."
-
-kubectl wait `
-  --for=condition=Ready `
-  pod `
-  -l app=inventario-service `
-  -n sistema-reservas `
-  --timeout=120s
-
-kubectl wait `
-  --for=condition=Ready `
-  pod `
-  -l app=notificaciones-service `
-  -n sistema-reservas `
-  --timeout=120s
-
-kubectl wait `
-  --for=condition=Ready `
-  pod `
-  -l app=pagos-service `
-  -n sistema-reservas `
-  --timeout=120s
-
-Write-Host "`nEstado final del sistema:"
+Write-Host ""
+Write-Host "Estado final de los pods:"
 
 kubectl get pods `
   -n sistema-reservas `
   -o wide
 
-Write-Host "`nServicios restaurados correctamente." `
+Write-Host ""
+Write-Host "Servicios restaurados correctamente." `
   -ForegroundColor Green
 
-Write-Host `
-  "Espere algunos segundos para que los Circuit Breakers salgan del estado abierto."
+Write-Host "Espere algunos segundos para que los Circuit Breakers se recuperen."
