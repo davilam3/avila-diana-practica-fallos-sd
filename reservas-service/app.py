@@ -205,23 +205,60 @@ def llamar_inventario(
 
 def restaurar_inventario(datos: dict[str, Any]) -> None:
     try:
-        requests.post(
+        app.logger.info(
+            "Iniciando compensación de inventario. "
+            "Evento=%s, cantidad=%s",
+            datos["evento_id"],
+            datos["cantidad"]
+        )
+
+        respuesta = requests.post(
             f"{INVENTARIO_URL}/inventario/restaurar",
             json=datos,
             timeout=2
         )
+
+        respuesta.raise_for_status()
+
+        app.logger.info(
+            "Inventario restaurado correctamente. "
+            "Evento=%s, cantidad=%s",
+            datos["evento_id"],
+            datos["cantidad"]
+        )
+
     except requests.RequestException as error:
         app.logger.error(
-            "No fue posible compensar el inventario: %s",
+            "No fue posible compensar el inventario. "
+            "Evento=%s, cantidad=%s, error=%s",
+            datos.get("evento_id"),
+            datos.get("cantidad"),
             error
         )
 
 
 def procesar_pago(datos: dict[str, Any]) -> dict[str, Any]:
     if not pagos_breaker.can_execute():
-        raise RuntimeError("Circuit Breaker de Pagos abierto")
+        estado = pagos_breaker.get_state()
+
+        app.logger.warning(
+            "Circuit Breaker de Pagos abierto. "
+            "Solicitud rechazada sin contactar al servicio. "
+            "Circuito=%s",
+            estado
+        )
+
+        raise RuntimeError(
+            "Circuit Breaker de Pagos abierto"
+        )
 
     try:
+        app.logger.info(
+            "Enviando solicitud al Servicio de Pagos. "
+            "Timeout configurado=%.1f segundos",
+            PAGOS_TIMEOUT
+        )
+
         respuesta = requests.post(
             f"{PAGOS_URL}/pagos/procesar",
             json=datos,
@@ -231,13 +268,19 @@ def procesar_pago(datos: dict[str, Any]) -> dict[str, Any]:
         respuesta.raise_for_status()
         pagos_breaker.register_success()
 
+        app.logger.info(
+            "Pago procesado correctamente. Circuito=%s",
+            pagos_breaker.get_state()
+        )
+
         return respuesta.json()
 
     except requests.Timeout as error:
         pagos_breaker.register_failure()
 
         app.logger.warning(
-            "Timeout en Pagos después de %.1f segundos. Circuito=%s",
+            "Timeout en Pagos después de %.1f segundos. "
+            "Circuito=%s",
             PAGOS_TIMEOUT,
             pagos_breaker.get_state()
         )
