@@ -114,15 +114,33 @@ def restaurar_inventario():
             "mensaje": "cantidad debe ser un número entero"
         }), 400
 
+    if cantidad <= 0:
+        return jsonify({
+            "estado": "error",
+            "mensaje": "cantidad debe ser mayor que cero"
+        }), 400
+
     with inventario_lock:
-        inventario[evento_id] = inventario.get(evento_id, 0) + cantidad
+        inventario[evento_id] = (
+            inventario.get(evento_id, 0) + cantidad
+        )
+
+        disponibles = inventario[evento_id]
+
+    app.logger.info(
+        "Inventario restaurado. "
+        "Evento=%s, cantidad=%s, disponibles=%s",
+        evento_id,
+        cantidad,
+        disponibles
+    )
 
     return jsonify({
         "estado": "restaurado",
         "evento_id": evento_id,
-        "disponibles": inventario[evento_id]
+        "cantidad": cantidad,
+        "disponibles": disponibles
     }), 200
-
 
 if __name__ == "__main__":
     app.run(
